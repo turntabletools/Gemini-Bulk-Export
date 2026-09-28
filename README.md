@@ -3,6 +3,9 @@
 Exports every conversation from [gemini.google.com](https://gemini.google.com) into
 individual `.txt` files — one file per chat, in `output/`.
 
+Covers both your **Recents** list and chats filed under **Notebooks** (which don't
+appear in Recents and are easy to miss).
+
 Windows. Node.js + Playwright.
 
 (The scraping logic is cross-platform; only `launch-chrome.bat` is
@@ -80,12 +83,16 @@ node scrape.js
 
 It will:
 
-1. Scroll the sidebar until the full conversation list has loaded.
-2. Visit each conversation by its real URL (`/app/<id>`).
-3. Scroll each chat up until all older turns have lazy-loaded.
-4. Write it to `output/NNNN_Conversation Title.txt`.
+1. Scroll the sidebar until the full Recents list has loaded.
+2. Open each notebook and work out the URL of every chat inside it.
+3. Visit each conversation by its real URL (`/app/<id>`).
+4. Scroll each chat up until all older turns have lazy-loaded.
+5. Write it to `output/NNNN_Conversation Title.txt`.
 
 Expect roughly **5 seconds per conversation** — about 25 minutes for 300 chats.
+Notebook chats cost an extra page load each during step 2, because the rows in a
+notebook carry no link of their own; the script has to click one to find out
+where it goes.
 Progress prints as it goes. Don't use that Chrome window while it runs.
 
 ---
@@ -158,7 +165,9 @@ in the Chrome window, wait for the sidebar, re-run.
 Google changed Gemini's HTML. Run the recon script to see the current structure:
 
 ```
-node inspect.js
+node inspect.js               # Recents sidebar + a conversation
+node inspect-all-notebooks.js # the /notebooks/view grid
+node inspect-notebooks.js     # a single notebook (open one in Chrome first)
 ```
 
 It prints the sidebar row's element chain and which custom elements hold the
@@ -167,7 +176,14 @@ and inside `extractConversationText`. As of the last working run they were:
 
 | What | Selector |
 |---|---|
-| Sidebar row | `conversations-list a[href^="/app/"]` (title in `aria-label`, id in `href`) |
+| Recents row | `conversations-list a[href^="/app/"]` (title in `aria-label`, id in `href`) |
+| Notebook card | `/notebooks/view`, then `project-mgmt-row` (title in `.title`) — **no href**; clicking navigates to `/notebook/<uuid>` |
+| Notebook chat row | `project-chat-row` — **no href**; clicking navigates to `/app/<id>` |
+
+> The two pinned notebooks in the sidebar *are* `<a href="/notebook/...">` links.
+> Don't enumerate notebooks with that selector — it silently matches only the
+> pinned ones and misses the rest. Use `project-mgmt-row` on `/notebooks/view`.
+
 | Your turns | `user-query` → `user-query-content` |
 | Gemini's turns | `model-response` → `message-content` |
 
@@ -185,7 +201,9 @@ growing, but a very long chat on a slow connection could settle early. Raise the
 |---|---|
 | `launch-chrome.bat` | Opens a normal Chrome with `--remote-debugging-port=9222` |
 | `scrape.js` | The exporter |
-| `inspect.js` | DOM recon — run this when selectors break |
+| `inspect.js` | DOM recon for the Recents sidebar and a conversation |
+| `inspect-all-notebooks.js` | DOM recon for the `/notebooks/view` grid |
+| `inspect-notebooks.js` | DOM recon for a single notebook's "Past chats" list |
 | `output/` | Exported conversations |
 | `failures.json` | Written only if something failed |
 | `chrome-cdp-profile/` | The dedicated Chrome profile (holds your login session) |
